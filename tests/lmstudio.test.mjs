@@ -6,6 +6,53 @@ const models = ['Q5_K_M', 'Q8_0'].map(quant => ({ type: 'llm', key: `gemma-4-e4b
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 const args = { model: 'gemma-heretic-q5', instruction: 'Describe this image', imageDataUrl: 'data:image/png;base64,AA==' };
 
+for (const scenario of [
+  { name: 'preexisting model and server', online: true, existing: true, foreign: false, unloads: 0, stops: 0 },
+  { name: 'own model on existing server', online: true, existing: false, foreign: false, unloads: 1, stops: 0 },
+  { name: 'own model and server', online: false, existing: false, foreign: false, unloads: 1, stops: 1 },
+  { name: 'foreign model on started server', online: false, existing: false, foreign: true, unloads: 1, stops: 0 }
+]) test(`shutdown preserves ownership: ${scenario.name}`, async () => {
+  let online = scenario.online, stops = 0;
+  let instances = scenario.existing ? [{ id: 'preexisting' }] : [];
+  const unloaded = [];
+  const client = createLMStudio({
+    runCli: async () => { online = true; }, stopCli: async () => { stops++; },
+    fetchImpl: async (url, options) => {
+      if (!online) throw Error('offline');
+      if (url.endsWith('/models')) return json({ models: [
+        { ...models[0], loaded_instances: instances },
+        ...(scenario.foreign ? [{ ...models[1], loaded_instances: [{ id: 'foreign' }] }] : [])
+      ] });
+      if (url.endsWith('/load')) { instances = [{ id: 'owned' }]; return json({ instance_id: 'owned' }); }
+      if (url.endsWith('/unload')) { unloaded.push(JSON.parse(options.body).instance_id); return json({}); }
+      return json({ output: [{ type: 'message', content: 'red square' }] });
+    }
+  });
+  await client.generate(args);
+  await Promise.all([client.shutdown(), client.shutdown()]);
+  assert.equal(stops, scenario.stops);
+  assert.deepEqual(unloaded, scenario.unloads ? ['owned'] : []);
+});
+
+test('shutdown waits for an in-flight model load, then unloads it without inference', async () => {
+  let finishLoad, enteredLoad, loaded = false;
+  const started = new Promise(resolve => { enteredLoad = resolve; });
+  const unloaded = [];
+  const client = createLMStudio({ fetchImpl: async (url, options) => {
+    if (url.endsWith('/models')) return json({ models: [{ ...models[0], loaded_instances: loaded ? [{ id: 'late-load' }] : [] }] });
+    if (url.endsWith('/load')) { enteredLoad(); return new Promise(resolve => { finishLoad = () => { loaded = true; resolve(json({ instance_id: 'late-load' })); }; }); }
+    if (url.endsWith('/unload')) { unloaded.push(JSON.parse(options.body).instance_id); return json({}); }
+    assert.fail('inference must not start during shutdown');
+  } });
+  const generation = client.generate(args);
+  const rejected = assert.rejects(generation, error => error.name === 'AbortError');
+  await started;
+  const cleanup = client.shutdown();
+  finishLoad();
+  await Promise.all([rejected, cleanup]);
+  assert.deepEqual(unloaded, ['late-load']);
+});
+
 test('exact quantization and vision required; DECKARD is never substituted', () => {
   const found = discoverModels([...models, { ...models[1], key: 'gemma-4-e4b-it-the-deckard-heretic', capabilities: { vision: true } }]);
   assert.equal(found[0].key, models[0].key);
@@ -18,6 +65,7 @@ test('each choice sends real image and correct quant, only final output is retur
   const requests = [];
   const client = createLMStudio({ fetchImpl: async (url, options) => {
     if (url.endsWith('/models')) return json({ models });
+    if (url.endsWith('/models/load')) return json({ instance_id: JSON.parse(options.body).model });
     requests.push(JSON.parse(options.body));
     return json({ output: [{ type: 'reasoning', content: 'private thinking' }, { type: 'message', content: 'red square' }], stats: { total_output_tokens: 4 } });
   } });
@@ -49,7 +97,7 @@ test('reject missing vision, unknown selection and empty responses', async () =>
   await assert.rejects(client.generate(args), /비전 보조/);
   await assert.rejects(client.generate({ ...args, model: 'unknown' }), e => e.status === 400);
   assert.equal(chatCalls, 0);
-  const empty = createLMStudio({ fetchImpl: async url => json(url.endsWith('/models') ? { models } : { output: [{ type: 'reasoning', content: 'thinking only' }] }) });
+  const empty = createLMStudio({ fetchImpl: async url => json(url.endsWith('/models') ? { models } : url.endsWith('/load') ? { instance_id: 'own-model' } : { output: [{ type: 'reasoning', content: 'thinking only' }] }) });
   await assert.rejects(empty.generate(args), /반환하지/);
 });
 
@@ -58,6 +106,7 @@ test('abort reaches inference and concurrent requests cannot load two models', a
   const started = new Promise(resolve => { entered = resolve; });
   const client = createLMStudio({ fetchImpl: async (url, options) => {
     if (url.endsWith('/models')) return json({ models });
+    if (url.endsWith('/models/load')) return json({ instance_id: 'own-model' });
     entered();
     return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true }));
   } });

@@ -692,6 +692,7 @@ textarea {
 .provider-button:hover:not(:disabled) { filter: brightness(1.16); }
 .provider-button:focus-visible, .text-button:focus-visible, .control-button:focus-visible { outline: 2px solid #a4cfff; outline-offset: 3px; }
 .connection-bar { display: flex; align-items: center; justify-content: space-between; min-height: 42px; padding: 8px 4px; gap: 14px; }
+.lifecycle-note { color: var(--muted); font-size: 11px; line-height: 1.5; padding: 0 4px 10px; }
 .text-button { background: transparent; border: 0; padding: 6px; color: var(--teal); cursor: pointer; white-space: nowrap; font-size: 12px; }
 .local-model-note { background: #111e22; border-left: 2px solid var(--teal-2); margin-top: 14px; padding: 10px 12px; border-radius: 4px; }
 .local-model-note strong { font-size: 12px; color: #b9e1d9; }

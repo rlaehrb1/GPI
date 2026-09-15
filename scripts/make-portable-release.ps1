@@ -1,5 +1,7 @@
 param(
-  [string]$NodeVersion = ""
+  [string]$NodeVersion = "",
+  [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]*$')]
+  [string]$PackageName = "GPI_2.5_Portable"
 )
 
 $ErrorActionPreference = "Stop"
@@ -7,11 +9,11 @@ $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $ReleaseDir = Join-Path $Root "release"
 $CacheDir = Join-Path $ReleaseDir ".cache"
-$StageDir = Join-Path $ReleaseDir "GPI_2.5_Portable"
+$StageDir = Join-Path $ReleaseDir $PackageName
 $AppDir = Join-Path $StageDir "app"
 $RuntimeDir = Join-Path $StageDir "runtime"
 $NodeDir = Join-Path $RuntimeDir "node"
-$ZipPath = Join-Path $ReleaseDir "GPI_2.5_Portable.zip"
+$ZipPath = Join-Path $ReleaseDir ($PackageName + ".zip")
 
 function Assert-InRoot($Path) {
   $full = [System.IO.Path]::GetFullPath($Path)
@@ -144,7 +146,7 @@ try {
 
 $RunBatName = "GPI " + [char]0xC2E4 + [char]0xD589 + ".bat"
 $GuideName = "GPI " + [char]0xCC98 + [char]0xC74C + " " + [char]0xC77D + [char]0xC5B4 + [char]0xC8FC + [char]0xC138 + [char]0xC694 + ".txt"
-$GuideBase64 = "R1BJIDIuNSDsi6Ttlokg67Cp67KVCgoxLiAiR1BJIOyLpO2WiS5iYXQi7J2EIOuNlOu4lO2BtOumre2VmOyEuOyalC4KMi4g7IOB64uoIENoYXRHUFQgLyBHZW1pbmkgLyBMTSBTdHVkaW8g7KSRIO2VmOuCmOulvCDshKDtg53tlZjshLjsmpQuCjMuIOydtOuvuOyngOulvCDrhKPqs6Ag7IOd7ISx7J2EIOuIhOultOyEuOyalC4KCuyyreuhneyDiTog7ZiE7J6sIOyCrOyaqSDspJEgLyDstIjroZ3sg4k6IOyXsOqysOuQqCAvIO2ajOyDiTog66+47Jew6rKwIC8g7KO87Zmp7IOJOiDsl7DqsrAg7ZWE7JqUIOuYkOuKlCDsp4Ttlokg7KSRCgpDaGF0R1BUOiDruIzrnbzsmrDsoIDsl5DshJwg6rOE7KCVIOuhnOq3uOyduCDtm4Qg7JWx7Jy866GcIOuPjOyVhOyYpOuptCDsnpDrj5kg7Jew6rKw65Cp64uI64ukLgpHZW1pbmk6IOyymOydjCDtlZwg67KI66eMIEFQSSDtgqTrpbwg7J6F66Cl7ZWY6rOgICLsoIDsnqXtlZjqs6Ag7IKs7JqpIuydhCDriITrpbTshLjsmpQuCkxNIFN0dWRpbzog66+466asIExNIFN0dWRpbyAwLjQg7J207IOB6rO8IEdlbW1hIDQgRTRCIEhlcmV0aWMgUTVfS19NIOuYkOuKlCBROF8wLArruYTsoIQg67O07KGwIO2MjOydvChtbXByb2op7J2EIOyEpOy5mO2VmOyEuOyalC4g7IOB64uoIOuyhO2KvOycvOuhnCDshJzrsoTrpbwg7J6Q64+ZIOyXsOqysO2VmOqzoArsg53shLHtlaAg65WMIOuqqOuNuOydhCDsnpDrj5nsnLzroZwg67aI65+s7Ji164uI64ukLiDsnbTrr7jsp4Ag67aE7ISd7J2AIOydtCDquLDquLDsl5DshJwg7Iuk7ZaJ7ZWp64uI64ukLgoK7KCc6rO17J6Q7JmAIOuqqOuNuCDshKDtg53snYAg64uk7J2M7JeQ64+EIOq4sOyWte2VqeuLiOuLpC4KR1BJ66W8IOyTsOuKlCDrj5nslYgg7Iuk7ZaJIOywveydgCDri6vsp4Ag66eI7IS47JqULgrruIzrnbzsmrDsoIDqsIAg7Je066as7KeAIOyViuycvOuptCBodHRwOi8vMTI3LjAuMC4xOjg3ODcg7J2EIOyXrOyEuOyalC4K"
+$GuideBase64 = "R1BJIDIuNSDsi6Ttlokg67Cp67KVCgoxLiAiR1BJIOyLpO2WiS5iYXQi7J2EIOuNlOu4lO2BtOumre2VmOyEuOyalC4KMi4g7IOB64uoIENoYXRHUFQgLyBHZW1pbmkgLyBMTSBTdHVkaW8g7KSRIO2VmOuCmOulvCDshKDtg53tlZjshLjsmpQuCjMuIOydtOuvuOyngOulvCDrhKPqs6Ag7IOd7ISx7J2EIOuIhOultOyEuOyalC4KCuyyreuhneyDiTog7ZiE7J6sIOyCrOyaqSDspJEgLyDstIjroZ3sg4k6IOyXsOqysOuQqCAvIO2ajOyDiTog66+47Jew6rKwIC8g7KO87Zmp7IOJOiDsl7DqsrAg7ZWE7JqUIOuYkOuKlCDsp4Ttlokg7KSRCgpDaGF0R1BUOiDruIzrnbzsmrDsoIDsl5DshJwg6rOE7KCVIOuhnOq3uOyduCDtm4Qg7JWx7Jy866GcIOuPjOyVhOyYpOuptCDsnpDrj5kg7Jew6rKw65Cp64uI64ukLgpHZW1pbmk6IOyymOydjCDtlZwg67KI66eMIEFQSSDtgqTrpbwg7J6F66Cl7ZWY6rOgICLsoIDsnqXtlZjqs6Ag7IKs7JqpIuydhCDriITrpbTshLjsmpQuCkxNIFN0dWRpbzog66+466asIExNIFN0dWRpbyAwLjQg7J207IOB6rO8IEdlbW1hIDQgRTRCIEhlcmV0aWMgUTVfS19NIOuYkOuKlCBROF8wLArruYTsoIQg67O07KGwIO2MjOydvChtbXByb2op7J2EIOyEpOy5mO2VmOyEuOyalC4g7IOB64uoIOuyhO2KvOycvOuhnCDshJzrsoTrpbwg7J6Q64+ZIOyXsOqysO2VmOqzoArsg53shLHtlaAg65WMIOuqqOuNuOydhCDsnpDrj5nsnLzroZwg67aI65+s7Ji164uI64ukLiDsnbTrr7jsp4Ag67aE7ISd7J2AIOydtCDquLDquLDsl5DshJwg7Iuk7ZaJ7ZWp64uI64ukLgoK7KCc6rO17J6Q7JmAIOuqqOuNuCDshKDtg53snYAg64uk7J2M7JeQ64+EIOq4sOyWte2VqeuLiOuLpC4K66eI7KeA66eJIEdQSSDruIzrnbzsmrDsoIAg7YOt7J2EIOuLq+ycvOuptCAxMOy0iCDrkqQg7J6Q64+ZIOyiheujjOuQqeuLiOuLpC4g7IOI66Gc6rOg7Lmo7ZWY6rGw64KYIOuLpOuluCBHUEkg7YOt7J20IOuCqOyVhCDsnojsnLzrqbQg6rOE7IaNIOyLpO2WieuQqeuLiOuLpC4gR1BJ6rCAIOu2iOufrOyYqCDroZzsu6wg66qo64246rO8IOyLnOyeke2VnCDrs7TsobAg7ISc67KE64+EIOygleumrO2VqeuLiOuLpC4g6riw7KG0IExNIFN0dWRpbyDshJzrsoTsmYAg66qo64247J2AIOycoOyngO2VqeuLiOuLpC4K67iM65287Jqw7KCA6rCAIOyXtOumrOyngCDslYrsnLzrqbQgaHR0cDovLzEyNy4wLjAuMTo4Nzg3IOydhCDsl6zshLjsmpQuCg=="
 
 @'
 @echo off
@@ -158,8 +160,8 @@ echo GPI 2.5
 echo ================================
 echo.
 echo Browser will open automatically.
-echo Keep this black window open while using GPI.
-echo Close this window when you want to stop GPI.
+echo Closing the last GPI browser tab will stop GPI after 10 seconds.
+echo You can also close this window to stop GPI.
 echo.
 
 if not exist "%~dp0runtime\node\node.exe" (
@@ -189,7 +191,7 @@ if errorlevel 1 (
 echo.
 echo GPI stopped.
 echo.
-pause
+exit /b 0
 '@ | Set-Content -LiteralPath (Join-Path $StageDir $RunBatName) -Encoding Default
 
 $GuideText = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($GuideBase64))

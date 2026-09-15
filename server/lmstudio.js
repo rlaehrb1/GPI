@@ -5,6 +5,12 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+async function executeCli(args, timeout = 30000) {
+  const local = path.join(homedir(), '.lmstudio', 'bin', process.platform === 'win32' ? 'lms.exe' : 'lms');
+  return execFileAsync(existsSync(local) ? local : 'lms', args, {
+    windowsHide: true, timeout, maxBuffer: 128 * 1024
+  });
+}
 export const LOCAL_MODELS = [
   { id: 'gemma-heretic-q5', label: 'Gemma 4 E4B · Q5_K_M', quantization: 'Q5_K_M' },
   { id: 'gemma-heretic-q8', label: 'Gemma 4 E4B · Q8_0', quantization: 'Q8_0' }
@@ -29,6 +35,7 @@ export function discoverModels(models) {
       key: model?.key || null,
       available: model?.capabilities?.vision === true,
       loaded: Boolean(model?.loaded_instances?.length),
+      instances: (model?.loaded_instances || []).map(instance => instance.id),
       reasoningOff: model?.capabilities?.reasoning?.allowed_options?.includes('off') || false,
       reason: !model ? '모델 설치 필요' : !model.capabilities?.vision ? '비전 보조 파일 확인 필요' : ''
     };
@@ -38,12 +45,8 @@ export function discoverModels(models) {
 export function createLMStudio({
   baseUrl = process.env.LMSTUDIO_BASE_URL || 'http://127.0.0.1:1234',
   fetchImpl = fetch,
-  runCli = async (port) => {
-    const local = path.join(homedir(), '.lmstudio', 'bin', process.platform === 'win32' ? 'lms.exe' : 'lms');
-    await execFileAsync(existsSync(local) ? local : 'lms', ['server', 'start', '--port', String(port)], {
-      windowsHide: true, timeout: 30000, maxBuffer: 128 * 1024
-    });
-  }
+  runCli = port => executeCli(['server', 'start', '--port', String(port)]),
+  stopCli = () => executeCli(['server', 'stop'], 5000)
 } = {}) {
   const url = new URL(baseUrl);
   if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
@@ -52,6 +55,12 @@ export function createLMStudio({
   const origin = url.origin;
   let connecting = null;
   let generating = false;
+  let closing = false;
+  let ownsServer = false;
+  let loading = null;
+  let cleanupPromise = null;
+  const ownedInstances = new Set();
+  const lifetime = new AbortController();
   async function request(endpoint, { signal, timeout = 4000, ...options } = {}) {
     const combined = AbortSignal.any([AbortSignal.timeout(timeout), ...(signal ? [signal] : [])]);
     const response = await fetchImpl(`${origin}${endpoint}`, {
@@ -79,12 +88,16 @@ export function createLMStudio({
     }
   }
   async function connect() {
+    if (closing) throw failure('GPI를 종료하고 있습니다.');
     if (connecting) return connecting;
     connecting = (async () => {
       const before = await status();
       if (before.running) return before;
       if (before.authRequired) throw failure(before.message, 401);
-      try { await runCli(url.port || 80); }
+      try {
+        const result = await runCli(url.port || 80);
+        ownsServer = !/already running/i.test(result?.stdout || '');
+      }
       catch { throw failure('LM Studio 자동 연결에 실패했습니다. LM Studio를 설치·실행한 뒤 다시 눌러 주세요.'); }
       const after = await status();
       if (!after.running) throw failure(after.message);
@@ -97,19 +110,32 @@ export function createLMStudio({
     if (!LOCAL_MODELS.some(item => item.id === model)) throw failure('지원하지 않는 로컬 모델입니다.', 400);
     if (generating) throw failure('로컬 모델이 생성 중입니다. 완료 또는 중단 후 다시 시도하세요.', 409);
     generating = true;
+    requestSignal = AbortSignal.any([lifetime.signal, ...(requestSignal ? [requestSignal] : [])]);
     try {
       requestSignal?.throwIfAborted();
       const current = await connect();
       requestSignal?.throwIfAborted();
       const selected = current.models.find(item => item.id === model);
       if (!selected?.available) throw failure(`${selected?.label}: ${selected?.reason}. LM Studio에서 해당 모델과 mmproj 파일을 확인하세요.`, 400);
-      // Native chat loads on demand. Do not unload models owned by other apps.
+      // Reuse pre-existing instances. Track only loads initiated by this GPI.
+      if (!selected.loaded) {
+        loading = request('/api/v1/models/load', {
+          method: 'POST', timeout: 120000,
+          body: JSON.stringify({ model: selected.key, context_length: 8192 })
+        }).then(data => {
+          if (!data.instance_id) throw failure('로컬 모델 로딩을 확인하지 못했습니다.');
+          ownedInstances.add(data.instance_id);
+          return data;
+        });
+        try { await loading; } finally { loading = null; }
+      }
+      requestSignal.throwIfAborted();
       const data = await request('/api/v1/chat', {
         method: 'POST', signal: requestSignal, timeout: 300000,
         body: JSON.stringify({
           model: selected.key,
           input: [{ type: 'text', content: instruction }, { type: 'image', data_url: imageDataUrl }],
-          context_length: 8192, max_output_tokens: 2000, temperature: 0.4,
+          max_output_tokens: 2000, temperature: 0.4,
           ...(selected.reasoningOff ? { reasoning: 'off' } : {}),
           stream: false, store: false
         })
@@ -124,5 +150,26 @@ export function createLMStudio({
       throw failure('LM Studio 연결이 끊겼습니다. 상단 LM Studio 버튼으로 다시 연결하세요.');
     } finally { generating = false; }
   }
-  return { status, connect, generate };
+  function shutdown() {
+    if (cleanupPromise) return cleanupPromise;
+    closing = true;
+    lifetime.abort();
+    cleanupPromise = (async () => {
+      // A load/start may complete after the browser disappears. Wait to record
+      // ownership before cleanup, rather than losing track of the new resource.
+      await Promise.allSettled([connecting, loading].filter(Boolean));
+      if (!ownsServer && ownedInstances.size === 0) return;
+      const current = await request('/api/v1/models').catch(() => null);
+      const liveIds = new Set((current?.models || []).flatMap(model => (model.loaded_instances || []).map(instance => instance.id)));
+      const foreignLoaded = [...liveIds].some(id => !ownedInstances.has(id));
+      const results = await Promise.allSettled([...ownedInstances].filter(id => liveIds.has(id)).map(instance_id => request('/api/v1/models/unload', {
+        method: 'POST', timeout: 5000, body: JSON.stringify({ instance_id })
+      })));
+      if (ownsServer && current && !foreignLoaded) await stopCli();
+      if (results.some(result => result.status === 'rejected')) throw failure('일부 로컬 모델을 해제하지 못했습니다. LM Studio 상태를 확인하세요.');
+      ownedInstances.clear();
+    })();
+    return cleanupPromise;
+  }
+  return { status, connect, generate, shutdown };
 }

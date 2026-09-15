@@ -7,7 +7,7 @@
     "dev": "node server/index.js",
     "build": "vite build",
     "start": "node server/index.js --production",
-    "check": "node --check server/index.js && node --check server/lmstudio.js && vite build",
+    "check": "node --check server/index.js && node --check server/lmstudio.js && node --check server/browser-lifecycle.js && vite build",
     "release:portable": "powershell -ExecutionPolicy Bypass -File scripts/make-portable-release.ps1",
     "test": "node --test tests/*.test.mjs"
   },

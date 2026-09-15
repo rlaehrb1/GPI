@@ -1,6 +1,7 @@
 import * as React from "react";
 import { loadPreferences, savePreferences, historySelection, startVisiblePolling } from "../client/preferences.js";
 import { createOutputControls } from "../client/output-controls.js";
+import { trackBrowserLifetime } from "../client/browser-lifecycle.js";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -183,6 +184,7 @@ function Segment({ options, value, onChange, disabled = false }) {
 const { OutputMode, ActionBar } = createOutputControls(React, ControlButton, { generate: Play, retry: RotateCcw, cancel: Square });
 
 function App() {
+  useEffect(() => trackBrowserLifetime(), []);
   const [initial] = useState(loadPreferences);
   const [provider, setProvider] = useState(initial.provider);
   const [openaiModel, setOpenaiModel] = useState(initial.openaiModel);
@@ -609,6 +611,7 @@ function App() {
         {provider === "gemini" && <button className="text-button" onClick={() => setKeyPanelOpen(open => !open)} disabled={busy || connectBusy}>API 키 관리</button>}
         {provider === "openai" && loginPending && <button className="text-button" onClick={connectOpenAI} disabled={connectBusy || busy}>로그인 다시 열기</button>}
       </div>
+      <div className="lifecycle-note">마지막 GPI 탭을 닫으면 10초 뒤 자동 종료됩니다. 새로고침은 괜찮아요.</div>
 
       {keyPanelOpen ? (
         <section className="key-panel">

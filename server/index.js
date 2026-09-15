@@ -1,11 +1,12 @@
 import express from "express";
 import { createLMStudio } from "./lmstudio.js";
+import { createBrowserLifecycle } from "./browser-lifecycle.js";
 import { buildInstruction, requireOutputFormat } from "./prompt.js";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +39,9 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_OUTPUT_TOKENS = 2000;
 const MAX_HISTORY = 20;
 const lmstudio = createLMStudio();
+let shuttingDown = false;
+const browserLifecycle = createBrowserLifecycle(() => shutdown());
+const loginProcesses = new Set();
 
 let openaiProxyProcess = null;
 let openaiProxyPort = OPENAI_PROXY_PORT;
@@ -263,6 +267,7 @@ async function waitForOpenAIProxy(processRef, timeoutMs = 20000) {
 }
 
 async function startOpenAIProxy() {
+  if (shuttingDown) throw new Error("GPI를 종료하고 있습니다.");
   if (openaiProxyStartPromise) {
     return openaiProxyStartPromise;
   }
@@ -277,6 +282,7 @@ async function startOpenAIProxy() {
 
 async function startOpenAIProxyOnce() {
   const existing = await openaiProxyStatus();
+  if (shuttingDown) throw new Error("GPI를 종료하고 있습니다.");
   if (existing.running) {
     return existing;
   }
@@ -326,7 +332,7 @@ async function startOpenAIProxyOnce() {
 
 function triggerOpenAIAutoStart() {
   const now = Date.now();
-  if (openaiProxyStartPromise || now - lastOpenAIAutoStartAt < 30_000) {
+  if (shuttingDown || openaiProxyStartPromise || now - lastOpenAIAutoStartAt < 30_000) {
     return;
   }
   lastOpenAIAutoStartAt = now;
@@ -336,36 +342,36 @@ function triggerOpenAIAutoStart() {
 }
 
 function launchOpenAILogin() {
+  if (shuttingDown) return { launched: false, throttled: true };
   const now = Date.now();
   if (now < loginLaunchUntil) {
     return { launched: false, throttled: true };
   }
   loginLaunchUntil = now + 60_000;
 
-  if (process.platform === "win32") {
-    const invocation = codexLoginInvocation();
-    spawn(invocation.command, invocation.args, {
-      cwd: ROOT_DIR,
-      detached: true,
-      stdio: "ignore",
-      windowsHide: false
-    }).unref();
-  } else {
-    const invocation = codexLoginInvocation();
-    spawn(invocation.command, invocation.args, {
-      cwd: ROOT_DIR,
-      detached: true,
-      stdio: "ignore"
-    }).unref();
-  }
+  const invocation = codexLoginInvocation();
+  const child = spawn(invocation.command, invocation.args, {
+    cwd: ROOT_DIR, detached: true, stdio: "ignore", windowsHide: true
+  });
+  loginProcesses.add(child);
+  child.once("exit", () => loginProcesses.delete(child));
+  child.once("error", () => loginProcesses.delete(child));
+  child.unref();
   return { launched: true, throttled: false };
 }
 
+function stopChild(child) {
+  if (!child?.pid || child.exitCode !== null) return Promise.resolve();
+  if (process.platform !== "win32") { child.kill(); return Promise.resolve(); }
+  return new Promise(resolve => execFile("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+    windowsHide: true, timeout: 5000
+  }, () => resolve()));
+}
+
 function stopOpenAIProxy() {
-  if (openaiProxyProcess && openaiProxyProcess.exitCode === null) {
-    openaiProxyProcess.kill();
-  }
+  const child = openaiProxyProcess;
   openaiProxyProcess = null;
+  return stopChild(child);
 }
 
 function parseDataUrl(dataUrl) {
@@ -647,6 +653,15 @@ async function createApp() {
   const app = express();
   app.use(express.json({ limit: "30mb" }));
   app.use(requireTrustedMutationOrigin);
+  app.use((_req, res, next) => {
+    if (shuttingDown) return res.status(503).json({ error: { message: "GPI를 종료하고 있습니다." } });
+    next();
+  });
+  app.get("/api/browser-session", (req, res) => {
+    const source = req.get("origin") || originFromUrl(req.get("referer") || "");
+    if (!isTrustedLocalOrigin(source)) return res.sendStatus(403);
+    browserLifecycle.attach(res);
+  });
 
   app.get("/api/status", asyncHandler(async (_req, res) => {
     const config = await loadConfig();
@@ -697,7 +712,7 @@ async function createApp() {
   }));
 
   app.post("/api/openai/disconnect", asyncHandler(async (_req, res) => {
-    stopOpenAIProxy();
+    await stopOpenAIProxy();
     await logEvent("openai_disconnect", {});
     res.json({ ok: true });
   }));
@@ -864,10 +879,23 @@ const server = app.listen(PORT, "127.0.0.1", () => {
   if (SHOULD_OPEN_BROWSER) openBrowser(url);
 });
 
-function shutdown() {
-  stopOpenAIProxy();
-  server.close(() => process.exit(0));
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log("GPI 종료 중: 로컬 모델과 보조 프로세스를 정리합니다.");
+  browserLifecycle.dispose();
+  server.close();
+  server.closeAllConnections();
+  // Windows allows only a short cleanup window on console close.
+  const deadline = setTimeout(() => process.exit(1), signal === "SIGHUP" ? 8000 : 135000);
+  const results = await Promise.allSettled([
+    lmstudio.shutdown(), stopOpenAIProxy(), ...[...loginProcesses].map(stopChild)
+  ]);
+  for (const result of results) if (result.status === "rejected") console.error(result.reason?.message);
+  clearTimeout(deadline);
+  process.exit(results.some(result => result.status === "rejected") ? 1 : 0);
 }
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) {
+  process.on(signal, () => void shutdown(signal));
+}
