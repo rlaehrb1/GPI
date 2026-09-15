@@ -617,7 +617,7 @@ async function downloadImageUrl(url) {
     const response = await fetch(parsed.toString(), {
       signal: timeout.signal,
       headers: {
-        "User-Agent": "GPI/2.5 local image loader"
+        "User-Agent": "GPI/2.9 local image loader"
       }
     });
     if (!response.ok) {
@@ -670,7 +670,7 @@ async function createApp() {
       triggerOpenAIAutoStart();
     }
     res.json({
-      version: "2.5.0",
+      version: "2.9.0",
       lmstudio: local,
       openai: {
         ...openai,
@@ -874,7 +874,7 @@ async function createApp() {
 const app = await createApp();
 const server = app.listen(PORT, "127.0.0.1", () => {
   const url = `http://127.0.0.1:${PORT}`;
-  console.log(`GPI 2.5 running at ${url}`);
+  console.log(`GPI 2.9 running at ${url}`);
   triggerOpenAIAutoStart();
   if (SHOULD_OPEN_BROWSER) openBrowser(url);
 });

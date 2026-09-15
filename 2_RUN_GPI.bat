@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 echo.
 echo ================================
-echo Starting GPI 2.5
+echo Starting GPI 2.9
 echo ================================
 echo.
 

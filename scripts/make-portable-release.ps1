@@ -1,7 +1,7 @@
 param(
   [string]$NodeVersion = "",
   [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9_.-]*$')]
-  [string]$PackageName = "GPI_2.5_Portable"
+  [string]$PackageName = "GPI_2.9_Portable"
 )
 
 $ErrorActionPreference = "Stop"
@@ -91,7 +91,7 @@ function Test-NodeZipHash {
   Write-Host "Node.js checksum verified."
 }
 
-Write-Host "Preparing GPI 2.5 portable release..." -ForegroundColor Cyan
+Write-Host "Preparing GPI 2.9 portable release..." -ForegroundColor Cyan
 Write-Host "Node runtime: $NodeTag"
 
 New-Item -ItemType Directory -Force -Path $ReleaseDir, $CacheDir | Out-Null
@@ -146,7 +146,7 @@ try {
 
 $RunBatName = "GPI " + [char]0xC2E4 + [char]0xD589 + ".bat"
 $GuideName = "GPI " + [char]0xCC98 + [char]0xC74C + " " + [char]0xC77D + [char]0xC5B4 + [char]0xC8FC + [char]0xC138 + [char]0xC694 + ".txt"
-$GuideBase64 = "R1BJIDIuNSDsi6Ttlokg67Cp67KVCgoxLiAiR1BJIOyLpO2WiS5iYXQi7J2EIOuNlOu4lO2BtOumre2VmOyEuOyalC4KMi4g7IOB64uoIENoYXRHUFQgLyBHZW1pbmkgLyBMTSBTdHVkaW8g7KSRIO2VmOuCmOulvCDshKDtg53tlZjshLjsmpQuCjMuIOydtOuvuOyngOulvCDrhKPqs6Ag7IOd7ISx7J2EIOuIhOultOyEuOyalC4KCuyyreuhneyDiTog7ZiE7J6sIOyCrOyaqSDspJEgLyDstIjroZ3sg4k6IOyXsOqysOuQqCAvIO2ajOyDiTog66+47Jew6rKwIC8g7KO87Zmp7IOJOiDsl7DqsrAg7ZWE7JqUIOuYkOuKlCDsp4Ttlokg7KSRCgpDaGF0R1BUOiDruIzrnbzsmrDsoIDsl5DshJwg6rOE7KCVIOuhnOq3uOyduCDtm4Qg7JWx7Jy866GcIOuPjOyVhOyYpOuptCDsnpDrj5kg7Jew6rKw65Cp64uI64ukLgpHZW1pbmk6IOyymOydjCDtlZwg67KI66eMIEFQSSDtgqTrpbwg7J6F66Cl7ZWY6rOgICLsoIDsnqXtlZjqs6Ag7IKs7JqpIuydhCDriITrpbTshLjsmpQuCkxNIFN0dWRpbzog66+466asIExNIFN0dWRpbyAwLjQg7J207IOB6rO8IEdlbW1hIDQgRTRCIEhlcmV0aWMgUTVfS19NIOuYkOuKlCBROF8wLArruYTsoIQg67O07KGwIO2MjOydvChtbXByb2op7J2EIOyEpOy5mO2VmOyEuOyalC4g7IOB64uoIOuyhO2KvOycvOuhnCDshJzrsoTrpbwg7J6Q64+ZIOyXsOqysO2VmOqzoArsg53shLHtlaAg65WMIOuqqOuNuOydhCDsnpDrj5nsnLzroZwg67aI65+s7Ji164uI64ukLiDsnbTrr7jsp4Ag67aE7ISd7J2AIOydtCDquLDquLDsl5DshJwg7Iuk7ZaJ7ZWp64uI64ukLgoK7KCc6rO17J6Q7JmAIOuqqOuNuCDshKDtg53snYAg64uk7J2M7JeQ64+EIOq4sOyWte2VqeuLiOuLpC4K66eI7KeA66eJIEdQSSDruIzrnbzsmrDsoIAg7YOt7J2EIOuLq+ycvOuptCAxMOy0iCDrkqQg7J6Q64+ZIOyiheujjOuQqeuLiOuLpC4g7IOI66Gc6rOg7Lmo7ZWY6rGw64KYIOuLpOuluCBHUEkg7YOt7J20IOuCqOyVhCDsnojsnLzrqbQg6rOE7IaNIOyLpO2WieuQqeuLiOuLpC4gR1BJ6rCAIOu2iOufrOyYqCDroZzsu6wg66qo64246rO8IOyLnOyeke2VnCDrs7TsobAg7ISc67KE64+EIOygleumrO2VqeuLiOuLpC4g6riw7KG0IExNIFN0dWRpbyDshJzrsoTsmYAg66qo64247J2AIOycoOyngO2VqeuLiOuLpC4K67iM65287Jqw7KCA6rCAIOyXtOumrOyngCDslYrsnLzrqbQgaHR0cDovLzEyNy4wLjAuMTo4Nzg3IOydhCDsl6zshLjsmpQuCg=="
+$GuideBase64 = "R1BJIDIuOSDsi6Ttlokg67Cp67KVCgoxLiAiR1BJIOyLpO2WiS5iYXQi7J2EIOuNlOu4lO2BtOumre2VmOyEuOyalC4KMi4g7IOB64uoIENoYXRHUFQgLyBHZW1pbmkgLyBMTSBTdHVkaW8g7KSRIO2VmOuCmOulvCDshKDtg53tlZjshLjsmpQuCjMuIOydtOuvuOyngOulvCDrhKPqs6Ag7IOd7ISx7J2EIOuIhOultOyEuOyalC4KCuyyreuhneyDiTog7ZiE7J6sIOyCrOyaqSDspJEgLyDstIjroZ3sg4k6IOyXsOqysOuQqCAvIO2ajOyDiTog66+47Jew6rKwIC8g7KO87Zmp7IOJOiDsl7DqsrAg7ZWE7JqUIOuYkOuKlCDsp4Ttlokg7KSRCgpDaGF0R1BUOiDruIzrnbzsmrDsoIDsl5DshJwg6rOE7KCVIOuhnOq3uOyduCDtm4Qg7JWx7Jy866GcIOuPjOyVhOyYpOuptCDsnpDrj5kg7Jew6rKw65Cp64uI64ukLgpHZW1pbmk6IOyymOydjCDtlZwg67KI66eMIEFQSSDtgqTrpbwg7J6F66Cl7ZWY6rOgICLsoIDsnqXtlZjqs6Ag7IKs7JqpIuydhCDriITrpbTshLjsmpQuCkxNIFN0dWRpbzog66+466asIExNIFN0dWRpbyAwLjQg7J207IOB6rO8IEdlbW1hIDQgRTRCIEhlcmV0aWMgUTVfS19NIOuYkOuKlCBROF8wLArruYTsoIQg67O07KGwIO2MjOydvChtbXByb2op7J2EIOyEpOy5mO2VmOyEuOyalC4g7IOB64uoIOuyhO2KvOycvOuhnCDshJzrsoTrpbwg7J6Q64+ZIOyXsOqysO2VmOqzoArsg53shLHtlaAg65WMIOuqqOuNuOydhCDsnpDrj5nsnLzroZwg67aI65+s7Ji164uI64ukLiDsnbTrr7jsp4Ag67aE7ISd7J2AIOydtCDquLDquLDsl5DshJwg7Iuk7ZaJ7ZWp64uI64ukLgoK7KCc6rO17J6Q7JmAIOuqqOuNuCDshKDtg53snYAg64uk7J2M7JeQ64+EIOq4sOyWte2VqeuLiOuLpC4K66eI7KeA66eJIEdQSSDruIzrnbzsmrDsoIAg7YOt7J2EIOuLq+ycvOuptCAxMOy0iCDrkqQg7J6Q64+ZIOyiheujjOuQqeuLiOuLpC4g7IOI66Gc6rOg7Lmo7ZWY6rGw64KYIOuLpOuluCBHUEkg7YOt7J20IOuCqOyVhCDsnojsnLzrqbQg6rOE7IaNIOyLpO2WieuQqeuLiOuLpC4gR1BJ6rCAIOu2iOufrOyYqCDroZzsu6wg66qo64246rO8IOyLnOyeke2VnCDrs7TsobAg7ISc67KE64+EIOygleumrO2VqeuLiOuLpC4g6riw7KG0IExNIFN0dWRpbyDshJzrsoTsmYAg66qo64247J2AIOycoOyngO2VqeuLiOuLpC4K67iM65287Jqw7KCA6rCAIOyXtOumrOyngCDslYrsnLzrqbQgaHR0cDovLzEyNy4wLjAuMTo4Nzg3IOydhCDsl6zshLjsmpQuCg=="
 
 @'
 @echo off
@@ -156,7 +156,7 @@ set "PATH=%~dp0runtime\node;%PATH%"
 
 echo.
 echo ================================
-echo GPI 2.5
+echo GPI 2.9
 echo ================================
 echo.
 echo Browser will open automatically.
@@ -166,14 +166,14 @@ echo.
 
 if not exist "%~dp0runtime\node\node.exe" (
   echo Missing runtime\node\node.exe
-  echo Please download GPI_2.5_Portable.zip again.
+  echo Please download GPI_2.9_Portable.zip again.
   pause
   exit /b 1
 )
 
 if not exist "%~dp0app\dist\index.html" (
   echo Missing app\dist\index.html
-  echo Please download GPI_2.5_Portable.zip again.
+  echo Please download GPI_2.9_Portable.zip again.
   pause
   exit /b 1
 )

@@ -1,3 +1,12 @@
+# GPI 2.9.0
+
+- 제공자 선택과 연결을 상단 ChatGPT OAuth / Gemini / LM Studio 버튼으로 통합했습니다.
+- 연결 상태와 현재 사용 중인 제공자를 색상과 문구로 표시합니다.
+- LM Studio의 Gemma 4 E4B Heretic Q5_K_M / Q8_0 비전 모델을 자동 연결하고 로드합니다.
+- 마지막 GPI 탭을 닫으면 10초 후 종료하며, 새로고침과 여러 탭 사용을 지원합니다.
+- 종료 시 GPI가 시작한 보조 프로세스와 불러온 로컬 모델만 정리합니다.
+- Windows 포터블 ZIP에 Node.js 런타임을 포함합니다.
+
 # GPI 2.5.0
 
 - Astra, Terra, Luna 모델 선택과 구형 모델 요청 차단.

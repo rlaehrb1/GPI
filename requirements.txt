@@ -1,4 +1,4 @@
-# GPI 2.5 runtime requirements
+# GPI 2.9 runtime requirements
 #
 # This is not a Python project. Do not run `pip install -r requirements.txt`.
 # JavaScript dependencies are installed from package.json/package-lock.json.

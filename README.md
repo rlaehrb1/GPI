@@ -1,14 +1,14 @@
-# GPI 2.5 Precision Studio
+# GPI 2.9 Precision Studio
 
 이미지를 넣으면 영어 이미지 프롬프트를 만들어 주는 로컬 웹앱입니다.
 ChatGPT/Codex OAuth, Gemini API 키, 또는 LM Studio 로컬 비전 모델로 사용합니다. OpenAI API 키나 Codex 데스크톱 앱은 필요 없습니다.
 
 ## 1. 완전 초보자용 실행 순서
 
-GitHub Releases에서 `GPI_2.5_Portable.zip`을 받은 사람은 아래처럼 하면 됩니다.
+GitHub Releases에서 `GPI_2.9_Portable.zip`을 받은 사람은 아래처럼 하면 됩니다.
 
 ```text
-1. GPI_2.5_Portable.zip 압축 풀기
+1. GPI_2.9_Portable.zip 압축 풀기
 2. GPI 실행.bat 더블클릭
 3. 브라우저가 자동으로 열림
 ```
@@ -251,7 +251,7 @@ npm run release:portable
 완성 파일:
 
 ```text
-release/GPI_2.5_Portable.zip
+release/GPI_2.9_Portable.zip
 ```
 
 ## 12. 설정 기억 및 상세 묘사

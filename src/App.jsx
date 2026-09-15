@@ -578,7 +578,7 @@ function App() {
         <div className="brand">
           <span className="brand-mark">G</span>
           <div>
-            <strong>GPI 2.5</strong>
+            <strong>GPI 2.9</strong>
             <span>Precision Studio</span>
           </div>
         </div>
