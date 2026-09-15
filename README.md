@@ -1,14 +1,14 @@
-# GPI 2.0 Precision Studio
+# GPI 2.5 Precision Studio
 
 이미지를 넣으면 영어 이미지 프롬프트를 만들어 주는 로컬 웹앱입니다.
 OpenAI API Key는 쓰지 않고, ChatGPT/Codex OAuth 또는 Gemini API Key로 사용합니다.
 
 ## 1. 완전 초보자용 실행 순서
 
-GitHub Releases에서 `GPI_2.0_Portable.zip`을 받은 사람은 아래처럼 하면 됩니다.
+GitHub Releases에서 `GPI_2.5_Portable.zip`을 받은 사람은 아래처럼 하면 됩니다.
 
 ```text
-1. GPI_2.0_Portable.zip 압축 풀기
+1. GPI_2.5_Portable.zip 압축 풀기
 2. GPI 실행.bat 더블클릭
 3. 브라우저가 자동으로 열림
 ```
@@ -29,7 +29,7 @@ GitHub Releases에서 `GPI_2.0_Portable.zip`을 받은 사람은 아래처럼 �
 https://nodejs.org/
 ```
 
-GitHub에서 받은 뒤 `GPI_2.0` 폴더를 엽니다.
+GitHub에서 받은 뒤 `GPI_2.5` 폴더를 엽니다.
 
 처음 설치할 때 여는 파일:
 
@@ -59,10 +59,10 @@ PowerShell에서:
 
 ```powershell
 git clone <repo-url>
-cd GPI_2.0
+cd GPI_2.5
 ```
 
-그다음 파일 탐색기에서 `GPI_2.0` 폴더를 열고 순서대로 실행합니다.
+그다음 파일 탐색기에서 `GPI_2.5` 폴더를 열고 순서대로 실행합니다.
 
 ```text
 1_INSTALL_FIRST.bat
@@ -99,9 +99,9 @@ npx @openai/codex login
 
 OpenAI OAuth 모델:
 
-- `gpt-5.5`
-- `gpt-5.4`
-- `gpt-5.4-mini`
+- `gpt-6-astra`
+- `gpt-5.6-terra`
+- `gpt-5.6-luna`
 
 추론 강도:
 
@@ -221,5 +221,17 @@ npm run release:portable
 완성 파일:
 
 ```text
-release/GPI_2.0_Portable.zip
+release/GPI_2.5_Portable.zip
 ```
+
+## 10. 설정 기억 및 상세 묘사
+
+모델·제공자·추론 강도는 현재 브라우저에 저장됩니다. 과거 기록의 폐기된 모델은 새 생성에 다시 선택되지 않습니다. 탭이 숨겨지거나 창이 최소화되면 주기적인 연결 확인을 멈추며, 화면으로 돌아오면 즉시 확인합니다. 진행 중인 생성은 계속됩니다.
+
+출력은 Person 다음에 Body를 포함하며, 보이는 체형·신체 비율과 의상의 재질감·길이·핏·주름·여밈 상태를 구체적으로 묘사합니다. 신체가 보이지 않으면 Body를 생략합니다. 출력 목표는 120~350단어입니다.
+
+## 11. 출력 방식 선택
+
+왼쪽 설정에서 서술형 또는 Booru 태그형을 선택합니다. 태그형은 Danbooru/Gelbooru 스타일의 영어 태그를 쉼표로 구분해 출력하며, 태그 내부 단어는 밑줄로 연결합니다. 온라인 태그 DB와 대조하는 기능은 아닙니다. 출력 방식은 브라우저와 생성 기록에 저장됩니다. 예전 기록은 서술형으로 불러옵니다.
+
+키워드·생성·Retry·Esc는 결과 상단의 복사 버튼 왼쪽에 있습니다. 두 출력 방식 모두 단어의 의미를 임의로 왜곡하거나 순화하지 않는 규칙을 적용합니다.

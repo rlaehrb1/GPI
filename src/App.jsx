@@ -1,3 +1,6 @@
+import * as React from "react";
+import { loadPreferences, savePreferences, historySelection, startVisiblePolling } from "../client/preferences.js";
+import { createOutputControls } from "../client/output-controls.js";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -20,7 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const OPENAI_MODELS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"];
+const OPENAI_MODELS = ["gpt-6-astra", "gpt-5.6-terra", "gpt-5.6-luna"];
 const GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
 const REASONING_EFFORTS = ["low", "medium", "high", "xhigh"];
 const GEMINI_THINKING = ["minimal", "low", "medium", "high"];
@@ -33,9 +36,9 @@ const providerLabels = {
 };
 
 const modelLabels = {
-  "gpt-5.5": "GPT-5.5",
-  "gpt-5.4": "GPT-5.4",
-  "gpt-5.4-mini": "GPT-5.4 Mini",
+  "gpt-6-astra": "GPT-6 Astra",
+  "gpt-5.6-terra": "GPT-5.6 Terra",
+  "gpt-5.6-luna": "GPT-5.6 Luna",
   "gemini-3.5-flash": "Gemini 3.5 Flash",
   "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite"
 };
@@ -172,12 +175,16 @@ function Segment({ options, value, onChange, disabled = false }) {
   );
 }
 
+const { OutputMode, ActionBar } = createOutputControls(React, ControlButton, { generate: Play, retry: RotateCcw, cancel: Square });
+
 function App() {
-  const [provider, setProvider] = useState("openai");
-  const [openaiModel, setOpenaiModel] = useState("gpt-5.5");
-  const [geminiModel, setGeminiModel] = useState("gemini-3.5-flash");
-  const [reasoningEffort, setReasoningEffort] = useState("medium");
-  const [thinkingLevel, setThinkingLevel] = useState("medium");
+  const [initial] = useState(loadPreferences);
+  const [provider, setProvider] = useState(initial.provider);
+  const [openaiModel, setOpenaiModel] = useState(initial.openaiModel);
+  const [geminiModel, setGeminiModel] = useState(initial.geminiModel);
+  const [reasoningEffort, setReasoningEffort] = useState(initial.reasoningEffort);
+  const [thinkingLevel, setThinkingLevel] = useState(initial.thinkingLevel);
+  const [outputFormat, setOutputFormat] = useState(initial.outputFormat);
   const [keyword, setKeyword] = useState("");
   const [image, setImage] = useState(null);
   const [urlText, setUrlText] = useState("");
@@ -220,11 +227,13 @@ function App() {
   }, []);
 
   useEffect(() => {
-    refreshStatus();
     refreshHistory();
-    const timer = setInterval(refreshStatus, 8000);
-    return () => clearInterval(timer);
+    return startVisiblePolling(refreshStatus);
   }, [refreshHistory, refreshStatus]);
+
+  useEffect(() => {
+    savePreferences({ provider, openaiModel, geminiModel, reasoningEffort, thinkingLevel, outputFormat });
+  }, [provider, openaiModel, geminiModel, reasoningEffort, thinkingLevel, outputFormat]);
 
   const setPreparedImage = useCallback((nextImage) => {
     setImage(nextImage);
@@ -357,6 +366,7 @@ function App() {
           reasoningEffort,
           thinkingLevel,
           keyword,
+          outputFormat,
           image: {
             dataUrl: image.dataUrl,
             name: image.name,
@@ -389,7 +399,8 @@ function App() {
     reasoningEffort,
     refreshHistory,
     refreshStatus,
-    thinkingLevel
+    thinkingLevel,
+    outputFormat
   ]);
 
   const cancel = useCallback(() => {
@@ -426,13 +437,16 @@ function App() {
   }, []);
 
   const applyHistory = useCallback((entry) => {
+    const selected = historySelection(entry, { provider, openaiModel, geminiModel, reasoningEffort, thinkingLevel, outputFormat });
     setResult(entry.text);
-    setProvider(entry.provider);
-    if (entry.provider === "openai") setOpenaiModel(entry.model);
-    if (entry.provider === "gemini") setGeminiModel(entry.model);
+    setProvider(selected.provider);
+    setOpenaiModel(selected.openaiModel);
+    setGeminiModel(selected.geminiModel);
+    setOutputFormat(selected.outputFormat);
     setKeyword(entry.keyword || "");
-    setMessage(`기록 불러옴 · ${entry.model}`);
-  }, []);
+    const active = selected.provider === "openai" ? selected.openaiModel : selected.geminiModel;
+    setMessage(active === entry.model ? `기록 불러옴 · ${entry.model}` : `기록 불러옴 · 당시 모델 ${entry.model} / 새 생성 ${active}`);
+  }, [provider, openaiModel, geminiModel, reasoningEffort, thinkingLevel, outputFormat]);
 
   useEffect(() => {
     function isTypingTarget(target) {
@@ -507,7 +521,7 @@ function App() {
         <div className="brand">
           <span className="brand-mark">G</span>
           <div>
-            <strong>GPI 2.0</strong>
+            <strong>GPI 2.5</strong>
             <span>Precision Studio</span>
           </div>
         </div>
@@ -671,26 +685,7 @@ function App() {
               <Segment options={GEMINI_THINKING} value={thinkingLevel} onChange={setThinkingLevel} disabled={busy} />
             )}
 
-            <label className="field-label" htmlFor="keyword">키워드</label>
-            <input
-              id="keyword"
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="선택 키워드"
-              disabled={busy}
-            />
-
-            <div className="generate-row">
-              <ControlButton icon={Play} className="primary" onClick={generate} disabled={!canGenerate} busy={busy}>
-                생성 <kbd>F1</kbd>
-              </ControlButton>
-              <ControlButton icon={RotateCcw} onClick={retry} disabled={!imageReady || busy} title="Retry">
-                <kbd>F5</kbd>
-              </ControlButton>
-              <ControlButton icon={Square} onClick={cancel} disabled={!busy} title="Cancel">
-                <kbd>Esc</kbd>
-              </ControlButton>
-            </div>
+            <OutputMode value={outputFormat} onChange={setOutputFormat} disabled={busy} />
           </section>
         </section>
 
@@ -701,6 +696,7 @@ function App() {
               <strong>{currentModel}</strong>
             </div>
             <div className="toolbar-actions">
+              <ActionBar keyword={keyword} setKeyword={setKeyword} busy={busy} canGenerate={canGenerate} imageReady={imageReady} generate={generate} retry={retry} cancel={cancel} />
               <ControlButton icon={Copy} onClick={copyResult} disabled={!result.trim()}>
                 복사 <kbd>Ctrl+C</kbd>
               </ControlButton>
@@ -733,7 +729,7 @@ function App() {
                 <button key={entry.id} className="history-item" onClick={() => applyHistory(entry)}>
                   <span>{entry.text.replace(/\s+/g, " ").slice(0, 88)}</span>
                   <small>
-                    {modelLabels[entry.model] || entry.model} · {new Date(entry.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {modelLabels[entry.model] || entry.model} · {new Date(entry.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {entry.outputFormat === "booru" ? "태그형" : "서술형"}
                   </small>
                 </button>
               ))

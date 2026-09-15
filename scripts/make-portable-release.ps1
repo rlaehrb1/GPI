@@ -7,16 +7,16 @@ $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $ReleaseDir = Join-Path $Root "release"
 $CacheDir = Join-Path $ReleaseDir ".cache"
-$StageDir = Join-Path $ReleaseDir "GPI_2.0_Portable"
+$StageDir = Join-Path $ReleaseDir "GPI_2.5_Portable"
 $AppDir = Join-Path $StageDir "app"
 $RuntimeDir = Join-Path $StageDir "runtime"
 $NodeDir = Join-Path $RuntimeDir "node"
-$ZipPath = Join-Path $ReleaseDir "GPI_2.0_Portable.zip"
+$ZipPath = Join-Path $ReleaseDir "GPI_2.5_Portable.zip"
 
 function Assert-InRoot($Path) {
   $full = [System.IO.Path]::GetFullPath($Path)
   $rootFull = [System.IO.Path]::GetFullPath($Root)
-  if (-not $full.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+  if (-not $full.StartsWith($rootFull.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to touch path outside project root: $full"
   }
 }
@@ -89,7 +89,7 @@ function Test-NodeZipHash {
   Write-Host "Node.js checksum verified."
 }
 
-Write-Host "Preparing GPI 2.0 portable release..." -ForegroundColor Cyan
+Write-Host "Preparing GPI 2.5 portable release..." -ForegroundColor Cyan
 Write-Host "Node runtime: $NodeTag"
 
 New-Item -ItemType Directory -Force -Path $ReleaseDir, $CacheDir | Out-Null
@@ -97,12 +97,15 @@ New-Item -ItemType Directory -Force -Path $ReleaseDir, $CacheDir | Out-Null
 Write-Host "Installing npm dependencies..."
 if (Test-Path -LiteralPath (Join-Path $Root "package-lock.json")) {
   npm ci
+  if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
 } else {
   npm install
+  if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
 }
 
 Write-Host "Building web app..."
 npm run build
+if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
 if (-not (Test-Path -LiteralPath $NodeZipPath)) {
   Write-Host "Downloading portable Node.js..."
@@ -127,14 +130,21 @@ Copy-Item -Path (Join-Path $NodeExtractDir "*") -Destination $NodeDir -Recurse -
 
 Copy-Item -LiteralPath (Join-Path $Root "server") -Destination $AppDir -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $Root "dist") -Destination $AppDir -Recurse -Force
-Copy-Item -LiteralPath (Join-Path $Root "node_modules") -Destination $AppDir -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $Root "package.json") -Destination $AppDir -Force
 Copy-Item -LiteralPath (Join-Path $Root "package-lock.json") -Destination $AppDir -Force
 Copy-Item -LiteralPath (Join-Path $Root "README.md") -Destination $AppDir -Force
 
+Push-Location -LiteralPath $AppDir
+try {
+  npm ci --omit=dev
+  if ($LASTEXITCODE -ne 0) { throw "Production dependency install failed" }
+} finally {
+  Pop-Location
+}
+
 $RunBatName = "GPI " + [char]0xC2E4 + [char]0xD589 + ".bat"
 $GuideName = "GPI " + [char]0xCC98 + [char]0xC74C + " " + [char]0xC77D + [char]0xC5B4 + [char]0xC8FC + [char]0xC138 + [char]0xC694 + ".txt"
-$GuideBase64 = "R1BJIDIuMCDsi6Ttlokg67Cp67KVCgoxLiAiR1BJIOyLpO2WiS5iYXQi7J2EIOuNlOu4lO2BtOumre2VmOyEuOyalC4KMi4g67iM65287Jqw7KCA6rCAIOyekOuPmeycvOuhnCDsl7Trpr3ri4jri6QuCjMuIOyVsSDsnITsqr0g6rCA7Jq0642w7JeQ7IScIO2VmOuCmOulvCDshKDtg53tlZjshLjsmpQuCgpPcGVuQUkg7IKs7JqpOgoiY2hhdCBncHQgb2F1dGgg66Gc6re47J24IiDrsoTtirzsnYQg64iE66W07IS47JqULgpPcGVuQUkgQVBJIEtleeuKlCDtlYTsmpQg7JeG7Iq164uI64ukLgoKR2VtaW5pIOyCrOyaqToKImdlbWluaSBhcGkga2V5IOyeheugpSIg67KE7Yq87J2EIOuIhOultOqzoCBHZW1pbmkgQVBJIEtleeulvCDrtpnsl6zrhKPsnLzshLjsmpQuCgrso7zsnZg6CkdQSeulvCDsk7DripQg64+Z7JWIIOqygOydgCDshJzrsoQg7LC97J2AIOuLq+yngCDrp4jshLjsmpQuCkdQSeulvCDrgYTqs6Ag7Iu27Jy866m0IOq3uCDqsoDsnYAg7LC97J2EIOuLq+ycvOuptCDrkKnri4jri6QuCgrruIzrnbzsmrDsoIDqsIAg7J6Q64+Z7Jy866GcIOyViCDsl7TrpqzrqbQg7JWE656YIOyjvOyGjOulvCDsp4HsoJEg7Jes7IS47JqULgpodHRwOi8vMTI3LjAuMC4xOjg3ODc="
+$GuideBase64 = "R1BJIDIuNSDsi6Ttlokg67Cp67KVCgoxLiAiR1BJIOyLpO2WiS5iYXQi7J2EIOuNlOu4lO2BtOumre2VmOyEuOyalC4KMi4g67iM65287Jqw7KCA6rCAIOyekOuPmeycvOuhnCDsl7Trpr3ri4jri6QuCjMuIOyVsSDsnITsqr0g6rCA7Jq0642w7JeQ7IScIO2VmOuCmOulvCDshKDtg53tlZjshLjsmpQuCgpPcGVuQUkg7IKs7JqpOgoiY2hhdCBncHQgb2F1dGgg66Gc6re47J24IiDrsoTtirzsnYQg64iE66W07IS47JqULgpPcGVuQUkgQVBJIEtleeuKlCDtlYTsmpQg7JeG7Iq164uI64ukLgoKR2VtaW5pIOyCrOyaqToKImdlbWluaSBhcGkga2V5IOyeheugpSIg67KE7Yq87J2EIOuIhOultOqzoCBHZW1pbmkgQVBJIEtleeulvCDrtpnsl6zrhKPsnLzshLjsmpQuCgrso7zsnZg6CkdQSeulvCDsk7DripQg64+Z7JWIIOqygOydgCDshJzrsoQg7LC97J2AIOuLq+yngCDrp4jshLjsmpQuCkdQSeulvCDrgYTqs6Ag7Iu27Jy866m0IOq3uCDqsoDsnYAg7LC97J2EIOuLq+ycvOuptCDrkKnri4jri6QuCgrruIzrnbzsmrDsoIDqsIAg7J6Q64+Z7Jy866GcIOyViCDsl7TrpqzrqbQg7JWE656YIOyjvOyGjOulvCDsp4HsoJEg7Jes7IS47JqULgpodHRwOi8vMTI3LjAuMC4xOjg3ODc="
 
 @'
 @echo off
@@ -144,7 +154,7 @@ set "PATH=%~dp0runtime\node;%PATH%"
 
 echo.
 echo ================================
-echo GPI 2.0
+echo GPI 2.5
 echo ================================
 echo.
 echo Browser will open automatically.
@@ -154,14 +164,14 @@ echo.
 
 if not exist "%~dp0runtime\node\node.exe" (
   echo Missing runtime\node\node.exe
-  echo Please download GPI_2.0_Portable.zip again.
+  echo Please download GPI_2.5_Portable.zip again.
   pause
   exit /b 1
 )
 
 if not exist "%~dp0app\dist\index.html" (
   echo Missing app\dist\index.html
-  echo Please download GPI_2.0_Portable.zip again.
+  echo Please download GPI_2.5_Portable.zip again.
   pause
   exit /b 1
 )
