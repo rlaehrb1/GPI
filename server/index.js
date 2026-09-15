@@ -1,4 +1,5 @@
 import express from "express";
+import { createLMStudio } from "./lmstudio.js";
 import { buildInstruction, requireOutputFormat } from "./prompt.js";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
@@ -36,6 +37,7 @@ const SUPPORTED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_OUTPUT_TOKENS = 2000;
 const MAX_HISTORY = 20;
+const lmstudio = createLMStudio();
 
 let openaiProxyProcess = null;
 let openaiProxyPort = OPENAI_PROXY_PORT;
@@ -648,12 +650,13 @@ async function createApp() {
 
   app.get("/api/status", asyncHandler(async (_req, res) => {
     const config = await loadConfig();
-    const openai = await openaiProxyStatus();
+    const [openai, local] = await Promise.all([openaiProxyStatus(), lmstudio.status()]);
     if (!openai.running) {
       triggerOpenAIAutoStart();
     }
     res.json({
       version: "2.5.0",
+      lmstudio: local,
       openai: {
         ...openai,
         initializing: Boolean(openaiProxyStartPromise)
@@ -683,10 +686,14 @@ async function createApp() {
         connected: false,
         loginStarted: login.launched,
         throttled: login.throttled,
-        message: "OpenAI OAuth 로그인 창을 열었습니다. 로그인 완료 후 다시 연결하세요.",
+        message: "브라우저에서 ChatGPT 로그인을 완료하면 자동으로 연결됩니다.",
         detail: error.message
       });
     }
+  }));
+
+  app.post("/api/lmstudio/connect", asyncHandler(async (_req, res) => {
+    res.json({ lmstudio: await lmstudio.connect() });
   }));
 
   app.post("/api/openai/disconnect", asyncHandler(async (_req, res) => {
@@ -758,6 +765,8 @@ async function createApp() {
         instruction,
         requestSignal: controller.signal
       });
+    } else if (provider === "lmstudio") {
+      output = await lmstudio.generate({ model, imageDataUrl: image.dataUrl, instruction, requestSignal: controller.signal });
     } else if (provider === "gemini") {
       const config = await loadConfig();
       output = await callGemini({
@@ -783,6 +792,7 @@ async function createApp() {
       ts: new Date().toISOString(),
       provider,
       model,
+      ...(output.resolvedModel ? { resolvedModel: output.resolvedModel } : {}),
       keyword,
       outputFormat,
       text: output.text,
