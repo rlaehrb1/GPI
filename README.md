@@ -29,7 +29,7 @@ GitHub Releases에서 `GPI_2.9_Portable.zip`을 받은 사람은 아래처럼 �
 https://nodejs.org/
 ```
 
-GitHub에서 받은 뒤 `GPI_2.5` 폴더를 엽니다.
+GitHub에서 받은 뒤 `GPI` 폴더를 엽니다.
 
 처음 설치할 때 여는 파일:
 
@@ -59,10 +59,10 @@ PowerShell에서:
 
 ```powershell
 git clone <repo-url>
-cd GPI_2.5
+cd GPI
 ```
 
-그다음 파일 탐색기에서 `GPI_2.5` 폴더를 열고 순서대로 실행합니다.
+그다음 파일 탐색기에서 `GPI` 폴더를 열고 순서대로 실행합니다.
 
 ```text
 1_INSTALL_FIRST.bat

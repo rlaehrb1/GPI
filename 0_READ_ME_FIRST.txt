@@ -6,7 +6,7 @@ GPI 2.9 처음 실행 안내
    LTS 버전을 받으면 됩니다.
    https://nodejs.org/
 
-2. GPI_2.5 폴더를 여세요.
+2. GPI 폴더를 여세요.
 
 3. 처음 한 번만 이 파일을 더블클릭하세요.
    1_INSTALL_FIRST.bat
