@@ -24,7 +24,7 @@ export function createOutputControls(React, Button, icons) {
       ),
       h('div', { className: 'toolbar-generation' },
         h(Button, { icon: icons.generate, className: 'primary', onClick: generate, disabled: !canGenerate, busy }, '생성 ', h('kbd', null, 'F1')),
-        h(Button, { icon: icons.retry, onClick: retry, disabled: !imageReady || busy, title: '같은 이미지로 다시 생성', 'aria-label': 'Retry' }, h('kbd', null, 'F5')),
+        h(Button, { icon: icons.retry, onClick: retry, disabled: !canGenerate, title: '같은 이미지로 다시 생성', 'aria-label': 'Retry' }, h('kbd', null, 'F5')),
         h(Button, { icon: icons.cancel, onClick: cancel, disabled: !busy, title: '생성 중단', 'aria-label': 'Esc' }, h('kbd', null, 'Esc'))
       )
     );

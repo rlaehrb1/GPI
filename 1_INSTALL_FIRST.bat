@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 echo.
 echo ================================
-echo GPI 2.5 first install
+echo GPI 2.9 first install
 echo ================================
 echo.
 

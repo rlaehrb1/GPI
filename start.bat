@@ -27,6 +27,6 @@ if not exist node_modules (
   )
 )
 
-echo Starting GPI 2.5...
+echo Starting GPI 2.9...
 echo The browser will open automatically.
 call npm run dev -- --open

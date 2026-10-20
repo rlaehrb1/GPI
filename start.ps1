@@ -20,6 +20,6 @@ if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot "node_modules"))) {
 }
 
 Write-Host ""
-Write-Host "Starting GPI 2.5..." -ForegroundColor Green
+Write-Host "Starting GPI 2.9..." -ForegroundColor Green
 Write-Host "The browser will open automatically."
 npm run dev -- --open

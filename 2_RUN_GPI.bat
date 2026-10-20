@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 echo.
 echo ================================
-echo Starting GPI 2.5
+echo Starting GPI 2.9
 echo ================================
 echo.
 
@@ -45,8 +45,8 @@ if not exist node_modules (
   )
 )
 
-echo Keep this black window open while using GPI.
-echo Close this window when you want to stop GPI.
+echo Closing the last GPI browser tab will stop GPI after 10 seconds.
+echo You can also close this window to stop GPI.
 echo.
 echo The browser will open automatically:
 echo http://127.0.0.1:8787
@@ -64,4 +64,4 @@ if errorlevel 1 (
 echo.
 echo GPI stopped.
 echo.
-pause
+exit /b 0

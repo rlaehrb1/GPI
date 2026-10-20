@@ -1,6 +1,7 @@
 import * as React from "react";
 import { loadPreferences, savePreferences, historySelection, startVisiblePolling } from "../client/preferences.js";
 import { createOutputControls } from "../client/output-controls.js";
+import { trackBrowserLifetime } from "../client/browser-lifecycle.js";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   Link,
   LoaderCircle,
   LogIn,
+  Monitor,
   Play,
   PlugZap,
   RotateCcw,
@@ -25,14 +27,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const OPENAI_MODELS = ["gpt-6-astra", "gpt-5.6-terra", "gpt-5.6-luna"];
 const GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
+const LOCAL_MODELS = ["gemma-heretic-q5", "gemma-heretic-q8"];
 const REASONING_EFFORTS = ["low", "medium", "high", "xhigh"];
 const GEMINI_THINKING = ["minimal", "low", "medium", "high"];
 const MAX_EDGE = 2048;
 const MAX_BYTES = 20 * 1024 * 1024;
 
 const providerLabels = {
-  openai: "OpenAI OAuth",
-  gemini: "Gemini"
+  openai: "ChatGPT",
+  gemini: "Gemini",
+  lmstudio: "LM Studio"
 };
 
 const modelLabels = {
@@ -40,7 +44,9 @@ const modelLabels = {
   "gpt-5.6-terra": "GPT-5.6 Terra",
   "gpt-5.6-luna": "GPT-5.6 Luna",
   "gemini-3.5-flash": "Gemini 3.5 Flash",
-  "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite"
+  "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite",
+  "gemma-heretic-q5": "Gemma 4 E4B · Q5_K_M",
+  "gemma-heretic-q8": "Gemma 4 E4B · Q8_0"
 };
 
 function formatBytes(bytes) {
@@ -178,10 +184,12 @@ function Segment({ options, value, onChange, disabled = false }) {
 const { OutputMode, ActionBar } = createOutputControls(React, ControlButton, { generate: Play, retry: RotateCcw, cancel: Square });
 
 function App() {
+  useEffect(() => trackBrowserLifetime(), []);
   const [initial] = useState(loadPreferences);
   const [provider, setProvider] = useState(initial.provider);
   const [openaiModel, setOpenaiModel] = useState(initial.openaiModel);
   const [geminiModel, setGeminiModel] = useState(initial.geminiModel);
+  const [localModel, setLocalModel] = useState(initial.localModel);
   const [reasoningEffort, setReasoningEffort] = useState(initial.reasoningEffort);
   const [thinkingLevel, setThinkingLevel] = useState(initial.thinkingLevel);
   const [outputFormat, setOutputFormat] = useState(initial.outputFormat);
@@ -195,6 +203,9 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [urlBusy, setUrlBusy] = useState(false);
   const [connectBusy, setConnectBusy] = useState(false);
+  const [localBusy, setLocalBusy] = useState(false);
+  const [loginPending, setLoginPending] = useState(false);
+  const [statusError, setStatusError] = useState(false);
   const [keyPanelOpen, setKeyPanelOpen] = useState(false);
   const [keyInput, setKeyInput] = useState("");
   const [dropActive, setDropActive] = useState(false);
@@ -202,18 +213,25 @@ function App() {
   const fileInputRef = useRef(null);
   const lastAppliedUrlRef = useRef("");
 
-  const currentModel = provider === "openai" ? openaiModel : geminiModel;
+  const currentModel = provider === "openai" ? openaiModel : provider === "lmstudio" ? localModel : geminiModel;
   const imageReady = Boolean(image?.dataUrl);
-  const canGenerate = imageReady && !busy && (provider !== "gemini" || status?.gemini?.keySaved);
+  const localInfo = status?.lmstudio?.models?.find(item => item.id === localModel);
+  const ready = {
+    openai: !statusError && Boolean(status?.openai?.running && status?.openai?.supportedModels?.includes(openaiModel)),
+    gemini: !statusError && Boolean(status?.gemini?.keySaved),
+    lmstudio: !statusError && Boolean(status?.lmstudio?.running && localInfo?.available)
+  };
+  const canGenerate = imageReady && !busy && !connectBusy && !localBusy && ready[provider];
 
-  const modelOptions = useMemo(() => (provider === "openai" ? OPENAI_MODELS : GEMINI_MODELS), [provider]);
+  const modelOptions = useMemo(() => (provider === "openai" ? OPENAI_MODELS : provider === "lmstudio" ? LOCAL_MODELS : GEMINI_MODELS), [provider]);
 
   const refreshStatus = useCallback(async () => {
     try {
       const data = await api("/api/status");
       setStatus(data);
+      setStatusError(false);
     } catch (error) {
-      setMessage(asErrorMessage(error));
+      setStatusError(true);
     }
   }, []);
 
@@ -232,8 +250,15 @@ function App() {
   }, [refreshHistory, refreshStatus]);
 
   useEffect(() => {
-    savePreferences({ provider, openaiModel, geminiModel, reasoningEffort, thinkingLevel, outputFormat });
-  }, [provider, openaiModel, geminiModel, reasoningEffort, thinkingLevel, outputFormat]);
+    savePreferences({ provider, openaiModel, geminiModel, localModel, reasoningEffort, thinkingLevel, outputFormat });
+  }, [provider, openaiModel, geminiModel, localModel, reasoningEffort, thinkingLevel, outputFormat]);
+
+  useEffect(() => {
+    if (loginPending && status?.openai?.running) {
+      setLoginPending(false);
+      setMessage("ChatGPT 연결 완료 · 바로 생성할 수 있습니다.");
+    }
+  }, [loginPending, status?.openai?.running]);
 
   const setPreparedImage = useCallback((nextImage) => {
     setImage(nextImage);
@@ -302,8 +327,10 @@ function App() {
         body: JSON.stringify({ login: true })
       });
       if (data.connected) {
+        setLoginPending(false);
         setMessage("OpenAI OAuth 연결됨");
       } else {
+        setLoginPending(true);
         setMessage(data.message || "OpenAI 로그인 시작됨");
       }
       await refreshStatus();
@@ -313,6 +340,34 @@ function App() {
       setConnectBusy(false);
     }
   }, [refreshStatus]);
+
+  const connectLocal = useCallback(async () => {
+    setLocalBusy(true);
+    setMessage("LM Studio 자동 연결 중...");
+    try {
+      const data = await api("/api/lmstudio/connect", { method: "POST", body: "{}" });
+      setStatus(previous => ({ ...previous, lmstudio: data.lmstudio }));
+      const available = data.lmstudio.models.filter(item => item.available);
+      setLocalModel(previous => available.some(item => item.id === previous) ? previous : available[0]?.id || previous);
+      setMessage(available.length ? "LM Studio 연결됨 · 생성할 때 모델을 자동으로 불러옵니다." : "LM Studio에서 Gemma Heretic 모델과 비전 보조 파일을 설치하세요.");
+      await refreshStatus();
+    } catch (error) { setMessage(asErrorMessage(error)); }
+    finally { setLocalBusy(false); }
+  }, [refreshStatus]);
+
+  // Restoring a local-provider preference requires no extra connection click.
+  useEffect(() => {
+    if (provider === "lmstudio") void connectLocal();
+  }, [provider, connectLocal]);
+
+  function selectProvider(next) {
+    if (busy || connectBusy || localBusy) return;
+    setKeyPanelOpen(false);
+    setProvider(next);
+    if (next === "openai" && !ready.openai && !loginPending) void connectOpenAI();
+    if (next === "gemini" && !ready.gemini) setKeyPanelOpen(true);
+    if (next === "lmstudio" && provider === "lmstudio" && !ready.lmstudio) void connectLocal();
+  }
 
   const saveGeminiKey = useCallback(async () => {
     if (!keyInput.trim()) {
@@ -350,10 +405,10 @@ function App() {
   }, [refreshStatus]);
 
   const generate = useCallback(async () => {
-    if (!imageReady || busy) return;
+    if (!canGenerate) return;
     setBusy(true);
     setResult("");
-    setMessage("프롬프트 생성 중...");
+    setMessage(provider === "lmstudio" ? "로컬 이미지 분석 중 · 첫 생성은 모델 로딩으로 더 걸릴 수 있습니다." : "프롬프트 생성 중...");
     const controller = new AbortController();
     abortRef.current = controller;
     try {
@@ -391,6 +446,7 @@ function App() {
     }
   }, [
     busy,
+    canGenerate,
     currentModel,
     image,
     imageReady,
@@ -405,7 +461,6 @@ function App() {
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
-    setBusy(false);
     setMessage("중단 중...");
   }, []);
 
@@ -437,16 +492,18 @@ function App() {
   }, []);
 
   const applyHistory = useCallback((entry) => {
-    const selected = historySelection(entry, { provider, openaiModel, geminiModel, reasoningEffort, thinkingLevel, outputFormat });
+    if (busy) return;
+    const selected = historySelection(entry, { provider, openaiModel, geminiModel, localModel, reasoningEffort, thinkingLevel, outputFormat });
     setResult(entry.text);
     setProvider(selected.provider);
     setOpenaiModel(selected.openaiModel);
     setGeminiModel(selected.geminiModel);
+    setLocalModel(selected.localModel);
     setOutputFormat(selected.outputFormat);
     setKeyword(entry.keyword || "");
-    const active = selected.provider === "openai" ? selected.openaiModel : selected.geminiModel;
+    const active = selected.provider === "openai" ? selected.openaiModel : selected.provider === "lmstudio" ? selected.localModel : selected.geminiModel;
     setMessage(active === entry.model ? `기록 불러옴 · ${entry.model}` : `기록 불러옴 · 당시 모델 ${entry.model} / 새 생성 ${active}`);
-  }, [provider, openaiModel, geminiModel, reasoningEffort, thinkingLevel, outputFormat]);
+  }, [provider, openaiModel, geminiModel, localModel, reasoningEffort, thinkingLevel, outputFormat, busy]);
 
   useEffect(() => {
     function isTypingTarget(target) {
@@ -521,62 +578,63 @@ function App() {
         <div className="brand">
           <span className="brand-mark">G</span>
           <div>
-            <strong>GPI 2.5</strong>
+            <strong>GPI 2.9</strong>
             <span>Precision Studio</span>
           </div>
         </div>
 
-        <div className="auth-actions" aria-label="인증 액션">
-          <ControlButton
-            icon={LogIn}
-            onClick={connectOpenAI}
-            busy={connectBusy}
-            title="ChatGPT OAuth 로그인"
-            className={`auth-button ${status?.openai?.running ? "connected" : ""}`}
-          >
-            chat gpt oauth 로그인
-          </ControlButton>
-          <ControlButton
-            icon={KeyRound}
-            onClick={() => setKeyPanelOpen((open) => !open)}
-            title="Gemini API key 입력"
-            className={`auth-button ${status?.gemini?.keySaved ? "connected" : ""}`}
-          >
-            gemini api key 입력
-          </ControlButton>
-        </div>
-
-        <div className="status-strip">
-          <span className={`status-pill ${status?.openai?.running ? "ok" : "warn"}`}>
-            <PlugZap size={14} />
-            ChatGPT OAuth {status?.openai?.running ? "연결됨" : "미연결"}
-          </span>
-          <span className={`status-pill ${status?.gemini?.keySaved ? "ok" : "muted"}`}>
-            <KeyRound size={14} />
-            Gemini {status?.gemini?.keySaved ? "키 저장됨" : "키 없음"}
-          </span>
-          <span className="status-message">{message === "Ready" ? "준비됨" : message}</span>
+        <div className="provider-switcher" aria-label="제공자 선택">
+          {[
+            { id: "openai", Icon: LogIn, detail: "ChatGPT 계정", action: "로그인", pending: connectBusy && provider === "openai" || loginPending },
+            { id: "gemini", Icon: KeyRound, detail: "API 키", action: "키 입력", pending: connectBusy && provider === "gemini" },
+            { id: "lmstudio", Icon: Monitor, detail: "내 기기에서 실행", action: "자동 연결", pending: localBusy }
+          ].map(({ id, Icon, detail, action, pending }) => {
+            const selected = provider === id;
+            const state = pending ? "pending" : ready[id] ? selected ? "active" : "ready" : selected ? "needs-connection" : "offline";
+            const label = pending ? id === "openai" && loginPending ? "로그인 대기" : "연결 중" : ready[id] ? selected ? "사용 중" : "연결됨 · 선택" : `${selected ? "선택됨 · " : ""}${action}`;
+            return (
+              <button key={id} type="button" className={`provider-button ${state}`}
+                aria-pressed={selected} aria-label={`${providerLabels[id]} · ${label}`}
+                disabled={busy || connectBusy || localBusy}
+                onClick={() => selectProvider(id)}>
+                {pending ? <LoaderCircle size={20} className="spin" /> : <Icon size={20} />}
+                <span className="provider-name"><strong>{providerLabels[id]}</strong><small>{detail}</small></span>
+                <span className="provider-state"><i />{label}</span>
+              </button>
+            );
+          })}
         </div>
       </header>
+
+      <div className="connection-bar">
+        <span className="status-message" role="status" aria-live="polite">{statusError ? "GPI 서버에 연결되지 않았습니다. 실행 창을 확인하세요." : message === "Ready" ? "상단에서 제공자를 선택하고 이미지를 넣어 주세요." : message}</span>
+        {provider === "gemini" && <button className="text-button" onClick={() => setKeyPanelOpen(open => !open)} disabled={busy || connectBusy}>API 키 관리</button>}
+        {provider === "openai" && loginPending && <button className="text-button" onClick={connectOpenAI} disabled={connectBusy || busy}>로그인 다시 열기</button>}
+      </div>
+      <div className="lifecycle-note">마지막 GPI 탭을 닫으면 10초 뒤 자동 종료됩니다. 새로고침은 괜찮아요.</div>
 
       {keyPanelOpen ? (
         <section className="key-panel">
           <div>
             <strong>Gemini API Key</strong>
-            <span>{status?.gemini?.keySaved ? "로컬 키가 저장되어 있습니다." : ".gpi/local.json에만 저장됩니다."}</span>
+            <span>{status?.gemini?.keySaved ? "저장된 키로 바로 사용할 수 있습니다." : "처음 한 번만 입력하세요. 이 기기에 저장됩니다."}</span>
           </div>
           <input
             value={keyInput}
             onChange={(event) => setKeyInput(event.target.value)}
             placeholder="Gemini API 키 붙여넣기"
             type="password"
+            aria-label="Gemini API 키"
+            autoFocus
+            onKeyDown={event => { if (event.key === "Enter" && !connectBusy) saveGeminiKey(); }}
           />
-          <ControlButton icon={CheckCircle2} onClick={saveGeminiKey} busy={connectBusy}>
-            저장
+          <ControlButton icon={CheckCircle2} onClick={saveGeminiKey} busy={connectBusy} disabled={connectBusy || !keyInput.trim()}>
+            저장하고 사용
           </ControlButton>
-          <ControlButton icon={Trash2} onClick={deleteGeminiKey} disabled={!status?.gemini?.keySaved}>
+          <ControlButton icon={Trash2} onClick={deleteGeminiKey} disabled={connectBusy || !status?.gemini?.keySaved}>
             삭제
           </ControlButton>
+          <ControlButton icon={X} onClick={() => setKeyPanelOpen(false)} aria-label="키 입력 닫기" />
         </section>
       ) : null}
 
@@ -652,29 +710,34 @@ function App() {
 
           <section className="settings-panel">
             <div className="panel-heading">
-              <span>제공자</span>
+              <span>생성 설정</span>
               <strong>{providerLabels[provider]}</strong>
             </div>
-            <Segment options={["openai", "gemini"]} value={provider} onChange={setProvider} disabled={busy} />
 
             <label className="field-label" htmlFor="modelSelect">모델</label>
             <select
               id="modelSelect"
               value={currentModel}
               onChange={(event) => {
-                provider === "openai" ? setOpenaiModel(event.target.value) : setGeminiModel(event.target.value);
+                provider === "openai" ? setOpenaiModel(event.target.value) : provider === "lmstudio" ? setLocalModel(event.target.value) : setGeminiModel(event.target.value);
                 if (event.target.value === "gemini-3.1-flash-lite") setThinkingLevel("minimal");
                 if (event.target.value === "gemini-3.5-flash") setThinkingLevel("medium");
               }}
               disabled={busy}
             >
               {modelOptions.map((model) => (
-                <option key={model} value={model}>
-                  {modelLabels[model]}
+                <option key={model} value={model} disabled={provider === "lmstudio" && status?.lmstudio?.running && !status.lmstudio.models.find(item => item.id === model)?.available}>
+                  {modelLabels[model]}{provider === "lmstudio" && status?.lmstudio?.running && !status.lmstudio.models.find(item => item.id === model)?.available ? " · 설치 확인 필요" : ""}
                 </option>
               ))}
             </select>
 
+            {provider === "lmstudio" ? (
+              <div className="local-model-note">
+                <strong>{localModel === "gemma-heretic-q5" ? "가벼운 실행 · Q5_K_M" : "높은 정밀도 · Q8_0"}</strong>
+                <p>{localInfo?.available ? "이미지는 이 기기에서 분석합니다. 모델은 생성할 때 자동으로 불러옵니다." : localInfo?.reason || "상단 LM Studio 버튼으로 자동 연결하세요."}</p>
+              </div>
+            ) : <>
             <div className="panel-heading compact">
               <span>{provider === "openai" ? "추론 강도" : "Gemini Thinking"}</span>
               <strong>{provider === "openai" ? reasoningEffort : thinkingLevel}</strong>
@@ -684,6 +747,7 @@ function App() {
             ) : (
               <Segment options={GEMINI_THINKING} value={thinkingLevel} onChange={setThinkingLevel} disabled={busy} />
             )}
+            </>}
 
             <OutputMode value={outputFormat} onChange={setOutputFormat} disabled={busy} />
           </section>
@@ -693,7 +757,7 @@ function App() {
           <div className="result-toolbar">
             <div>
               <span>결과</span>
-              <strong>{currentModel}</strong>
+              <strong>{modelLabels[currentModel]}</strong>
             </div>
             <div className="toolbar-actions">
               <ActionBar keyword={keyword} setKeyword={setKeyword} busy={busy} canGenerate={canGenerate} imageReady={imageReady} generate={generate} retry={retry} cancel={cancel} />
@@ -726,7 +790,7 @@ function App() {
           <div className="history-list">
             {history.length ? (
               history.map((entry) => (
-                <button key={entry.id} className="history-item" onClick={() => applyHistory(entry)}>
+                <button key={entry.id} className="history-item" onClick={() => applyHistory(entry)} disabled={busy || connectBusy || localBusy}>
                   <span>{entry.text.replace(/\s+/g, " ").slice(0, 88)}</span>
                   <small>
                     {modelLabels[entry.model] || entry.model} · {new Date(entry.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {entry.outputFormat === "booru" ? "태그형" : "서술형"}

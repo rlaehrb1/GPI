@@ -2,11 +2,12 @@
 export const SETTINGS_KEY = 'gpi.preferences.v1';
 export const DEFAULTS = Object.freeze({
   provider: 'openai', openaiModel: 'gpt-6-astra',
-  geminiModel: 'gemini-3.5-flash', reasoningEffort: 'medium', thinkingLevel: 'medium',
+  geminiModel: 'gemini-3.5-flash', localModel: 'gemma-heretic-q5', reasoningEffort: 'medium', thinkingLevel: 'medium',
   outputFormat: 'narrative'
 });
 const ALLOWED = {
-  provider: ['openai', 'gemini'],
+  provider: ['openai', 'gemini', 'lmstudio'],
+  localModel: ['gemma-heretic-q5', 'gemma-heretic-q8'],
   openaiModel: ['gpt-6-astra', 'gpt-5.6-terra', 'gpt-5.6-luna'],
   geminiModel: ['gemini-3.5-flash', 'gemini-3.1-flash-lite'],
   reasoningEffort: ['low', 'medium', 'high', 'xhigh'],
@@ -31,7 +32,7 @@ export function historySelection(entry, current) {
   result.outputFormat = ALLOWED.outputFormat.includes(entry?.outputFormat) ? entry.outputFormat : 'narrative';
   if (!ALLOWED.provider.includes(entry?.provider)) return result;
   result.provider = entry.provider;
-  const field = entry.provider === 'openai' ? 'openaiModel' : 'geminiModel';
+  const field = entry.provider === 'openai' ? 'openaiModel' : entry.provider === 'lmstudio' ? 'localModel' : 'geminiModel';
   // Historical metadata stays unchanged; retired models never become active.
   if (ALLOWED[field].includes(entry.model)) result[field] = entry.model;
   return result;
